@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PlantDoc AI — Diagnóstico Botânico Inteligente</title>
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <link rel="stylesheet" href="CSS/style.css" />
+</head>
+<body>
+  <!-- Header & Configuração de API -->
+  <header class="app-header">
+    <div class="container header-content">
+      <div class="brand">
+        <div class="brand-icon">
+          <i data-lucide="sprout"></i>
+        </div>
+        <div>
+          <h1>PlantDoc <span class="badge-ai">AI</span></h1>
+          <p class="subtitle">Agronomia & Fitopatologia Digital</p>
+        </div>
+      </div>
+
+      <button id="toggleApiBtn" class="btn-outline btn-sm" title="Configurar Chave de API">
+        <i data-lucide="key-round"></i>
+        <span id="apiStatusText">API Key</span>
+      </button>
+    </div>
+
+    <!-- Drawer de Configuração da API Key (Testes Locais) -->
+    <div id="apiConfigDrawer" class="api-drawer hidden">
+      <div class="container api-drawer-inner">
+        <div class="api-input-group">
+          <label for="apiKeyInput">Google Gemini API Key (armazenada apenas na sessão local):</label>
+          <div class="input-row">
+            <input type="password" id="apiKeyInput" placeholder="AIzaSy..." autocomplete="off" />
+            <button id="saveApiBtn" class="btn-primary btn-sm">Salvar</button>
+          </div>
+        </div>
+        <p class="api-hint">
+          <i data-lucide="shield-check"></i> Em produção, utilize o endpoint <code>/api/analyze</code> (arquivo <code>server.js</code>) para ocultar a chave.
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main-grid">
+    <!-- Coluna Esquerda: Captura e Entrada -->
+    <section class="capture-section">
+      <div class="card upload-card">
+        <h2>1. Foto da Planta</h2>
+        <p class="helper-text">Envie uma foto nítida das folhas, caule ou sintomas visíveis.</p>
+
+        <!-- Área Drag & Drop -->
+        <div id="dropZone" class="drop-zone" tabindex="0">
+          <input type="file" id="fileInput" accept="image/*" hidden />
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+
+          <div id="uploadPlaceholder" class="upload-placeholder">
+            <div class="upload-circle">
+              <i data-lucide="image-plus"></i>
+            </div>
+            <p class="drop-title">Arraste e solte a imagem aqui</p>
+            <p class="drop-sub">JPG, PNG ou WEBP (máx. 10MB)</p>
+
+            <div class="upload-actions">
+              <button type="button" id="btnGallery" class="btn-secondary">
+                <i data-lucide="folder-open"></i> Galeria
+              </button>
+              <button type="button" id="btnCamera" class="btn-primary">
+                <i data-lucide="camera"></i> Tirar Foto
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview da Imagem com Efeito Scanner -->
+          <div id="previewContainer" class="preview-container hidden">
+            <img id="imagePreview" src="" alt="Pré-visualização da planta" />
+            <div id="scannerOverlay" class="scanner-overlay hidden">
+              <div class="scanner-beam"></div>
+              <span class="scanner-label">Analisando tecidos foliares...</span>
+            </div>
+            <button type="button" id="btnRemoveImage" class="btn-remove" title="Remover imagem">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Contexto Opcional -->
+        <div class="form-group">
+          <label for="contextInput">
+            <i data-lucide="message-square-plus"></i> Sintomas ou ambiente (Opcional)
+          </label>
+          <textarea 
+            id="contextInput" 
+            rows="2" 
+            placeholder="Ex: As folhas começaram a amarelar há 3 dias, fica dentro de casa com luz indireta..."
+          ></textarea>
+        </div>
+
+        <!-- Botão de Ação Principal -->
+        <button type="button" id="btnAnalyze" class="btn-primary btn-block" disabled>
+          <i data-lucide="scan-search"></i>
+          <span>Diagnosticar Planta</span>
+        </button>
+
+        <div id="errorAlert" class="alert-error hidden">
+          <i data-lucide="alert-circle"></i>
+          <span id="errorMessage"></span>
+        </div>
+      </div>
+
+      <!-- Histórico Local (Últimas 5 análises) -->
+      <div class="card history-card">
+        <div class="card-header-row">
+          <h3><i data-lucide="history"></i> Histórico Recente</h3>
+          <button type="button" id="btnClearHistory" class="btn-text hidden">Limpar</button>
+        </div>
+        <div id="historyList" class="history-list">
+          <p class="empty-state">Nenhuma análise realizada ainda.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Coluna Direita: Resultados da IA -->
+    <section class="results-section">
+      <!-- Estado Inicial -->
+      <div id="emptyResultState" class="card empty-result-card">
+        <div class="empty-illustration">
+          <i data-lucide="microscope"></i>
+        </div>
+        <h3>Pronto para o Diagnóstico</h3>
+        <p>Envie uma foto da sua planta ao lado para receber uma avaliação agronômica completa: espécie, pragas, doenças e plano de recuperação.</p>
+      </div>
+
+      <!-- Skeleton Loading -->
+      <div id="loadingSkeleton" class="results-stack hidden">
+        <div class="card skeleton-card">
+          <div class="skeleton-line w-40"></div>
+          <div class="skeleton-line w-70 h-lg"></div>
+          <div class="skeleton-line w-50"></div>
+        </div>
+        <div class="card skeleton-card">
+          <div class="skeleton-line w-60"></div>
+          <div class="skeleton-line w-100"></div>
+          <div class="skeleton-line w-90"></div>
+        </div>
+        <div class="card skeleton-card">
+          <div class="skeleton-line w-50"></div>
+          <div class="skeleton-line w-100"></div>
+          <div class="skeleton-line w-85"></div>
+        </div>
+      </div>
+
+      <!-- Alerta caso a imagem não seja uma planta -->
+      <div id="notPlantCard" class="card not-plant-card hidden">
+        <div class="warning-icon">
+          <i data-lucide="leaf-off"></i>
+        </div>
+        <h3>Nenhuma planta identificada</h3>
+        <p id="notPlantReason">Não foi possível identificar uma espécie vegetal nítida nesta imagem. Tente aproximar a câmera das folhas ou melhorar a iluminação.</p>
+      </div>
+
+      <!-- Painel de Resultados Estruturados -->
+      <div id="resultsContainer" class="results-stack hidden">
+        <!-- Card 1: Identificação e Status -->
+        <article class="card result-header-card">
+          <div class="status-row">
+            <span id="healthBadge" class="status-badge">Saudável</span>
+            <span id="confidenceBadge" class="confidence-pill">
+              <i data-lucide="sparkles"></i> 95% de confiança
+            </span>
+          </div>
+
+          <h2 id="plantName" class="plant-title">Costela-de-Adão</h2>
+          <p id="scientificName" class="scientific-name">Monstera deliciosa</p>
+        </article>
+
+        <!-- Card 2: Diagnóstico Detalhado -->
+        <article class="card diagnosis-card">
+          <div class="card-title-icon">
+            <i data-lucide="stethoscope"></i>
+            <h3 id="diagnosisTitle">Diagnóstico Fitossanitário</h3>
+          </div>
+          <p id="detailedAnalysis" class="analysis-text"></p>
+        </article>
+
+        <!-- Card 3: Plano de Ação -->
+        <article class="card treatment-card">
+          <div class="card-title-icon">
+            <i data-lucide="clipboard-check"></i>
+            <h3>Plano de Ação Imediato</h3>
+          </div>
+          <ol id="treatmentSteps" class="steps-list"></ol>
+        </article>
+
+        <!-- Card 4: Cuidados Preventivos -->
+        <article class="card care-card">
+          <div class="card-title-icon">
+            <i data-lucide="heart-handshake"></i>
+            <h3>Guia de Cultivo Preventivo</h3>
+          </div>
+          <div class="care-grid">
+            <div class="care-item">
+              <div class="care-icon water"><i data-lucide="droplets"></i></div>
+              <div>
+                <h4>Rega Ideal</h4>
+                <p id="careWater"></p>
+              </div>
+            </div>
+            <div class="care-item">
+              <div class="care-icon light"><i data-lucide="sun"></i></div>
+              <div>
+                <h4>Luminosidade</h4>
+                <p id="careLight"></p>
+              </div>
+            </div>
+            <div class="care-item">
+              <div class="care-icon soil"><i data-lucide="layers"></i></div>
+              <div>
+                <h4>Solo & Adubação</h4>
+                <p id="careSoil"></p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script src="JS/app.js"></script>
+</body>
+</html>
